@@ -444,6 +444,16 @@ impl SglangSchedulerClient {
 
         // Hardcode to true: gRPC backends return raw token IDs, not decoded text.
         // Detokenization happens on the SMG Rust side (StopDecoder/Sequence).
+        //
+        // Note: TokenSpeed's HTTP serving_chat sets this to false when tools are
+        // present (serving_chat.py:178-179) — but mirroring that on the gRPC
+        // path measurably HURTS BFCL accuracy. We tested it: simple_python
+        // dropped from ~88.75 % to 79 %, parallel_multiple from ~84.5 % to
+        // 60.5 %. With skip_special_tokens=false the engine emits the
+        // ``<|tool_call_*|>`` special tokens in the raw output stream, and the
+        // SMG-side detokenizer + kimik2 tool-call parser then double-counts or
+        // misframes them. Keep it at true so SMG sees normal tokens and
+        // applies its own parsing.
         let skip_special_tokens = true;
 
         Ok(proto::SamplingParams {
