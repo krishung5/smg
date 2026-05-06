@@ -624,10 +624,13 @@ class TokenSpeedSchedulerServicer(tokenspeed_scheduler_pb2_grpc.TokenSpeedSchedu
         else:
             obj.rid = request.request_id
 
-        # Preserve original_text for logging if present (purely cosmetic;
-        # tokenization is skipped because input_ids is set).
-        if request.tokenized.original_text:
-            obj.text = request.tokenized.original_text
+        # NOTE: We deliberately do NOT set ``obj.text`` even when the proto
+        # carries ``original_text``. TokenSpeed's HTTP serving_chat passes
+        # ``input_ids=[...], text=None`` to the engine; setting both fields
+        # has been observed to perturb the engine's input-processor path
+        # (some validators and normalizers branch on whether text is
+        # populated). Matching the HTTP shape — ids only, text=None —
+        # eliminates one source of HTTP-vs-gRPC divergence.
 
         return obj
 
