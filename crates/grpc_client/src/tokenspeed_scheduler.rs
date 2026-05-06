@@ -461,14 +461,25 @@ mod translate {
     use super::{sglang, tokenspeed_proto as ts};
 
     pub(super) fn sampling_params(s: sglang::SamplingParams) -> ts::SamplingParams {
+        // sglang's proto declares numeric scalars as non-optional, so the Rust
+        // router has already substituted semantic defaults (e.g.
+        // ``temperature=1.0``, ``top_p=1.0``, ``repetition_penalty=1.0``)
+        // before getting here. tokenspeed's proto declares the same fields
+        // as ``optional`` so the servicer can use ``HasField()`` to
+        // distinguish presence — wrap the (already-defaulted) sglang values
+        // in ``Some(...)`` to mark them as explicitly set on the wire. This
+        // preserves the pre-fix behavior while letting future direct-to-
+        // tokenspeed clients use ``None`` to mean "let the engine default
+        // apply" (e.g. for health-probe / warmup paths that would otherwise
+        // hit ``top_p must be in (0, 1], got 0.0``).
         ts::SamplingParams {
-            temperature: s.temperature,
-            top_p: s.top_p,
-            top_k: s.top_k,
-            min_p: s.min_p,
-            frequency_penalty: s.frequency_penalty,
-            presence_penalty: s.presence_penalty,
-            repetition_penalty: s.repetition_penalty,
+            temperature: Some(s.temperature),
+            top_p: Some(s.top_p),
+            top_k: Some(s.top_k),
+            min_p: Some(s.min_p),
+            frequency_penalty: Some(s.frequency_penalty),
+            presence_penalty: Some(s.presence_penalty),
+            repetition_penalty: Some(s.repetition_penalty),
             max_new_tokens: s.max_new_tokens,
             min_new_tokens: s.min_new_tokens,
             stop: s.stop,

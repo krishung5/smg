@@ -41,16 +41,23 @@ service TokenSpeedScheduler {
 // =====================
 
 // IMPORTANT: proto3 numeric defaults (0) do NOT match semantic defaults
-// (temperature=1.0, top_p=1.0, top_k=-1). The router/servicer must construct
-// with explicit values — never rely on Default::default().
+// (temperature=1.0, top_p=1.0, top_k=-1). All sampling scalars are
+// declared ``optional`` so presence is preserved on the wire — the
+// servicer uses ``HasField()`` to distinguish "client explicitly set 0"
+// from "client didn't send anything." Without this, ``temperature=0``
+// (a valid request for greedy decoding) is indistinguishable from the
+// proto3 default and would be silently dropped by truthy-check guards.
+//
+// ``min_new_tokens`` is left non-optional because 0 is its semantic
+// "no minimum" sentinel.
 message SamplingParams {
-  float temperature = 1;
-  float top_p = 2;
-  int32 top_k = 3;
-  float min_p = 4;
-  float frequency_penalty = 5;
-  float presence_penalty = 6;
-  float repetition_penalty = 7;
+  optional float temperature = 1;
+  optional float top_p = 2;
+  optional int32 top_k = 3;
+  optional float min_p = 4;
+  optional float frequency_penalty = 5;
+  optional float presence_penalty = 6;
+  optional float repetition_penalty = 7;
 
   optional uint32 max_new_tokens = 8;
   uint32 min_new_tokens = 9;

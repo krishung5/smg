@@ -643,31 +643,35 @@ class TokenSpeedSchedulerServicer(tokenspeed_scheduler_pb2_grpc.TokenSpeedSchedu
         """
         out: dict[str, Any] = {}
 
-        # Proto3 scalars (temperature, top_p, ...) are always present with a
-        # zero-ish default when the client didn't send them. Treat the
-        # zero-ish default as "use TokenSpeed's own default" and only forward
-        # fields the client explicitly set. ``max_new_tokens`` and
-        # ``stream_interval`` are ``optional`` in the proto, so we can use
-        # HasField() for true presence tracking.
-        if params.HasField("max_new_tokens"):
-            out["max_new_tokens"] = params.max_new_tokens
-        if params.temperature:
-            out["temperature"] = params.temperature
-        if params.top_p:
-            out["top_p"] = params.top_p
-        # top_k = 0 is invalid for TokenSpeed (treated as "disable").
-        # Only forward if positive.
-        if params.top_k:
-            out["top_k"] = params.top_k
-        if params.min_p:
-            out["min_p"] = params.min_p
-        if params.frequency_penalty:
-            out["frequency_penalty"] = params.frequency_penalty
-        if params.presence_penalty:
-            out["presence_penalty"] = params.presence_penalty
-        if params.repetition_penalty:
-            out["repetition_penalty"] = params.repetition_penalty
+        # All sampling scalars in tokenspeed_scheduler.proto are declared
+        # ``optional`` (matching ``vllm_engine.proto``). We use
+        # ``HasField()`` to forward only the values the client explicitly
+        # set; absent fields fall through to the engine's own
+        # ``SamplingParams.__init__`` defaults. This eliminates the old
+        # truthy-check pitfall that silently dropped ``temperature=0``
+        # (BFCL's intent for greedy decoding) AND the warmup-default-zero
+        # crash where invalid ``top_p=0.0`` / ``repetition_penalty=0.0``
+        # would reach the engine from internal probe paths.
+        #
+        # When ``temperature=0`` does reach the engine (HasField=True for
+        # an explicitly-sent ``0.0``), the engine
+        # (``sampling_params.py:104-107``) sets ``top_k=1`` to engage
+        # greedy decoding. That's the path BFCL relies on.
+        for _field in (
+            "max_new_tokens",
+            "temperature",
+            "top_p",
+            "top_k",
+            "min_p",
+            "frequency_penalty",
+            "presence_penalty",
+            "repetition_penalty",
+        ):
+            if params.HasField(_field):
+                out[_field] = getattr(params, _field)
+
         if params.min_new_tokens:
+            # ``min_new_tokens`` is non-optional; 0 is the "no minimum" sentinel.
             out["min_new_tokens"] = params.min_new_tokens
 
         # Lists
